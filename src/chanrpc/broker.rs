@@ -80,11 +80,8 @@ where
 #[cfg(test)]
 mod test_mpsc_broker {
     use tokio::sync::mpsc;
-
-    use crate::chanrpc::broker::Sender;
     use crate::chanrpc::{ChanCtx, Proto};
-
-    use super::{AsyncBroker, Broker};
+    use super::Broker;
 
     enum TestProto {
         CtrlShutdown,
@@ -117,7 +114,7 @@ mod test_mpsc_broker {
         > for TestBroker
     {
         fn new(
-            name: ComponentName,
+            _name: ComponentName,
             tx_map: &std::collections::HashMap<
                 ComponentName,
                 mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,

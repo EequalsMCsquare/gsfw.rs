@@ -1,7 +1,7 @@
 mod adaptor;
 mod agent;
 mod make_agent;
-mod server;
+mod gate;
 
-pub use server::Server;
+pub use gate::Gate;
 pub use make_agent::AgentService;
