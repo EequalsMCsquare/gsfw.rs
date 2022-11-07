@@ -1,19 +1,25 @@
+use super::{cast::CastTx, ChanCtx, Proto};
 pub use super::{
     receiver::{AsyncReceiver, Receiver},
     sender::{AsyncSender, Sender},
 };
-use super::{ChanCtx, Proto};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
-pub trait Broker<P, N, E, Tx>
+pub trait Broker<P, N, E, Tx, Rx>
 where
     P: Proto,
-    Tx: Sender<ChanCtx<P, N, E>>,
+    Tx: Sender<ChanCtx<P, N, E>> + Clone,
+    Rx: Receiver<ChanCtx<P, N, E>>,
 {
     fn new(name: N, tx_map: &HashMap<N, Tx>) -> Self;
     fn name(&self) -> N;
     fn tx(&self, name: N) -> &Tx;
+    fn channel(size: usize) -> (Tx, Rx);
+
+    fn cast_tx(&self, name: N) -> super::cast::CastTx<P, N, E, Tx> {
+        CastTx::new(self.name(), self.tx(name).clone())
+    }
 
     fn blocking_cast(&self, to: N, msg: P) {
         let tx = self.tx(to);
@@ -34,12 +40,13 @@ where
 }
 
 #[async_trait]
-pub trait AsyncBroker<P, N, E, Tx>: Broker<P, N, E, Tx>
+pub trait AsyncBroker<P, N, E, Tx, Rx>: Broker<P, N, E, Tx, Rx>
 where
     P: Proto,
     N: Send,
     E: Send,
-    Tx: AsyncSender<ChanCtx<P, N, E>>,
+    Tx: AsyncSender<ChanCtx<P, N, E>> + Clone,
+    Rx: AsyncReceiver<ChanCtx<P, N, E>>,
 {
     async fn cast(&self, to: N, msg: P)
     where
@@ -67,82 +74,13 @@ where
     }
 }
 
-impl<T, P, N, E, Tx> AsyncBroker<P, N, E, Tx> for T
+impl<T, P, N, E, Tx, Rx> AsyncBroker<P, N, E, Tx, Rx> for T
 where
     P: Proto,
     N: Send,
     E: Send,
-    Tx: AsyncSender<ChanCtx<P, N, E>>,
-    T: Broker<P, N, E, Tx>,
+    Tx: AsyncSender<ChanCtx<P, N, E>> + Clone,
+    Rx: AsyncReceiver<ChanCtx<P, N, E>>,
+    T: Broker<P, N, E, Tx, Rx>,
 {
 }
-
-#[cfg(test)]
-mod test_mpsc_broker {
-    use tokio::sync::mpsc;
-    use crate::chanrpc::{ChanCtx, Proto};
-    use super::Broker;
-
-    enum TestProto {
-        CtrlShutdown,
-    }
-    impl Proto for TestProto {
-        fn proto_shutdown() -> Self {
-            Self::CtrlShutdown
-        }
-    }
-
-    #[derive(Clone, Copy, PartialEq, PartialOrd, Hash, Eq)]
-    enum ComponentName {
-        ComponentA,
-        ComponentB,
-        ComponentC,
-    }
-
-    struct TestBroker {
-        a: mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,
-        b: mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,
-        c: mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,
-    }
-
-    impl
-        Broker<
-            TestProto,
-            ComponentName,
-            anyhow::Error,
-            mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,
-        > for TestBroker
-    {
-        fn new(
-            _name: ComponentName,
-            tx_map: &std::collections::HashMap<
-                ComponentName,
-                mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>>,
-            >,
-        ) -> Self {
-            Self {
-                a: tx_map.get(&ComponentName::ComponentA).unwrap().clone(),
-                b: tx_map.get(&ComponentName::ComponentB).unwrap().clone(),
-                c: tx_map.get(&ComponentName::ComponentC).unwrap().clone(),
-            }
-        }
-
-        fn name(&self) -> ComponentName {
-            ComponentName::ComponentA
-        }
-
-        fn tx(
-            &self,
-            name: ComponentName,
-        ) -> &mpsc::Sender<ChanCtx<TestProto, ComponentName, anyhow::Error>> {
-            match name {
-                ComponentName::ComponentA => &self.a,
-                ComponentName::ComponentB => &self.b,
-                ComponentName::ComponentC => &self.c,
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod test_mpsc_async_broker {}

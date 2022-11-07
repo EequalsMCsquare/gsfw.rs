@@ -3,18 +3,22 @@ use tokio::sync::mpsc;
 
 use crate::error::Error as BrokerError;
 
-pub trait Sender<T> {
+pub trait Sender<T>: Send {
     fn blocking_send(&self, msg: T) -> Result<(), BrokerError>;
 }
 
-impl<T> Sender<T> for mpsc::Sender<T> {
+impl<T> Sender<T> for mpsc::Sender<T> 
+where T: Send
+{
     fn blocking_send(&self, msg: T) -> Result<(), BrokerError> {
         mpsc::Sender::blocking_send(self, msg)
             .map_err(|err| BrokerError::SendError(err.to_string()))
     }
 }
 
-impl<T> Sender<T> for crossbeam::channel::Sender<T> {
+impl<T> Sender<T> for crossbeam::channel::Sender<T> 
+where T: Send
+{
     fn blocking_send(&self, msg: T) -> Result<(), BrokerError> {
         self.send(msg)
             .map_err(|err| BrokerError::SendError(err.to_string()))
