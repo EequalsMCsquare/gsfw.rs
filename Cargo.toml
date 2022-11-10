@@ -16,3 +16,4 @@ thiserror = "1"
 futures = "0.3"
 pin-project = "1"
 bytes = "1.2"
+gsfw-util = {path = "./gsfw-util"}

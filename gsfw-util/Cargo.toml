@@ -6,3 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+tokio = {version = "1", features = ["full"]}
+pin-project = "1"
+futures = "0.3"
+parking_lot = "0.12"
+thiserror = "1"
+async-recursion = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+mockall = "0.11"
