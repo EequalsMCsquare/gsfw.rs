@@ -2,6 +2,12 @@
 name = "gsfw-util"
 version = "0.1.0"
 edition = "2021"
+authors = ["XiaoZ zhongxiao0711@gmail.com"]
+license = "Apache-2.0"
+description = "game server development utils"
+readme = "README.md"
+repository = "https://github.com/EequalsMCsquare/gsfw.rs"
+keywords = ["game", "game server util"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,4 +21,4 @@ async-recursion = "1"
 tracing = "0.1"
 
 [dev-dependencies]
-mockall = "0.11"
+test-case = "2.2.2"

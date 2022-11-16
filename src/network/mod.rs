@@ -1,5 +1,4 @@
 mod adaptor;
-mod agent;
 mod make_agent;
 mod gate;
 

@@ -2,6 +2,12 @@
 name = "gsfw"
 version = "0.1.0"
 edition = "2021"
+authors = ["XiaoZ zhongxiao0711@gmail.com"]
+license = "Apache-2.0"
+description = "tiny game server lib"
+readme = "README.md"
+repository = "https://github.com/EequalsMCsquare/gsfw.rs"
+keywords = ["game", "game server"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,4 +22,9 @@ thiserror = "1"
 futures = "0.3"
 pin-project = "1"
 bytes = "1.2"
-gsfw-util = {path = "./gsfw-util"}
+gsfw-util = { path = "./gsfw-util", optional = true, version = "0.1.0" }
+
+[features]
+default = []
+
+util = ["gsfw-util"]

@@ -5,7 +5,7 @@ use pin_project::pin_project;
 use std::{
     collections::{HashMap, VecDeque},
     fmt::Debug,
-    ops::Add,
+    ops::{Add, AddAssign},
     pin::Pin,
     sync::Arc,
     task::Poll,
@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 /// async fn main() {
 ///     let now = std::time::Instant::now();
 ///     let mut wheel = Wheel::<i32>::new(60, std::time::Duration::from_secs(1), now);
-///     let snapshot = wheel.dispatch(std::time::Duration::from_secs(3), 1).await.unwrap();
+///     let snapshot = wheel.dispatch(std::time::Duration::from_secs(2), 1).await.unwrap();
 ///     let recv_data = wheel.tick().await;
 ///     assert_eq!(recv_data.len(), 1);
 ///     assert_eq!(recv_data[0].id, snapshot.id);
@@ -88,7 +88,8 @@ where
         if end < now {
             return Err(super::Error::TimeElapse(Some(data)));
         }
-        if end > self.round_end() {
+        let round_end = self.round_end();
+        if end > round_end {
             return Err(super::Error::Overflow(Some(data)));
         }
         let meta = Meta::new(now, end, data);
@@ -220,7 +221,7 @@ where
 
     /// batch_add atomic operation. either all metas are added to the wheel, nor none is added.
     /// batch_add will first check metas's id is unique and
-    /// then check all metas are not overflow
+    /// then check all metas are not overflow or elapse
     pub async fn batch_add(
         &mut self,
         metas: Vec<Meta<T>>,
@@ -374,6 +375,7 @@ where
             timer_map: Default::default(),
         }
     }
+
 }
 
 impl<T: Debug + Send> Future for Inner<T>
@@ -393,6 +395,7 @@ where
                     if let Some(proto) = ready!(this.rx.poll_recv(cx)) {
                         match proto {
                             TimeWheelProto::Tick => {
+                                this.start.write().add_assign(this.slot_duration.clone());
                                 if let Some(metas) = this.wq.pop_front() {
                                     this.wq.push_back(Default::default());
                                     if metas.len() == 0 {

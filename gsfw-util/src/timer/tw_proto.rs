@@ -6,7 +6,6 @@ use super::timer::Meta;
 pub(crate) enum TimeWheelProto<T> {
     Tick,
     Add(Meta<T>),
-    /// BatchAdd require all metas' slot is the same
     BatchAdd(Vec<(Meta<T>, usize)>),
     Cancel {
         id: u64,
