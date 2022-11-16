@@ -1,30 +1,5 @@
-[package]
-name = "gsfw"
-version = "0.1.0"
-edition = "2021"
-authors = ["XiaoZ zhongxiao0711@gmail.com"]
-license = "Apache-2.0"
-description = "tiny game server lib"
-readme = "README.md"
-repository = "https://github.com/EequalsMCsquare/gsfw.rs"
-keywords = ["game", "game server"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["full"] }
-tracing = { version = "0.1.30" }
-async-trait = "0.1.57"
-tower = "0.4"
-crossbeam = { version = "0.8.2" }
-thiserror = "1"
-futures = "0.3"
-pin-project = "1"
-bytes = "1.2"
-gsfw-util = { path = "./gsfw-util", optional = true, version = "0.1.0" }
-
-[features]
-default = []
-
-util = ["gsfw-util"]
+[workspace]
+members = [
+	"gsfw",
+	"gsfw-util",
+	]
