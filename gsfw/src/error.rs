@@ -12,4 +12,12 @@ pub enum Error {
     IO(#[from] tokio::io::Error),
     #[error("no component. you must register at least one component to the Game.")]
     NoComponent,
+    #[error("sink send error occur. close agent")]
+    SinkSend,
+    #[error("adaptor send error occur. close agent")]
+    AdaptorSend,
+    #[error("adaptor recv error occur. close agent")]
+    AdaptorRecv,
+    #[error("adaptor ready error occur. close agent")]
+    AdaptorReady
 }
