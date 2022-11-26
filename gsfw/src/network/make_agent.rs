@@ -84,6 +84,9 @@ where
                                         tracing::error!("fail to call Sink::send: {:?}", err);
                                         return Err(crate::error::Error::SinkSend)
                                     }
+                                } else {
+                                    // tracing::debug!("connection closed by peer or timeout reached");
+                                    return Ok(())
                                 }
                             },
                             Err(err) => {

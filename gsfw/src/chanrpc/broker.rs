@@ -8,7 +8,6 @@ pub trait Broker {
     type Proto: super::Proto;
     type Name: super::Name;
     type Err: Send;
-    // type Ctx = ChanCtx<Self::Proto, Self::Name, Self::Err>;
 
     fn new(
         name: Self::Name,
@@ -21,6 +20,10 @@ pub trait Broker {
         CastTx::new(self.name(), self.tx(name).clone())
     }
 
+    async fn call_tx(&self, name: Self::Name) -> CallTx<Self::Proto, Self::Name, Self::Err> {
+        CallTx::new(self.name(), self.tx(name).clone())
+    }
+
     async fn cast(&self, to: Self::Name, msg: Self::Proto) {
         let tx = self.tx(to);
         if let Err(err) = tx.send(ChanCtx::new_cast(msg, self.name())).await {
@@ -28,8 +31,11 @@ pub trait Broker {
         }
     }
 
-    async fn call_tx(&self, name: Self::Name) -> CallTx<Self::Proto, Self::Name, Self::Err> {
-        CallTx::new(self.name(), self.tx(name).clone())
+    fn blocking_cast(&self, to: Self::Name, msg: Self::Proto) {
+        let tx = self.tx(to);
+        if let Err(err) = tx.blocking_send(ChanCtx::new_cast(msg, self.name())) {
+            tracing::error!("fail to cast. {}", err)
+        }
     }
 
     async fn call(&self, to: Self::Name, msg: Self::Proto) -> Result<Self::Proto, Self::Err> {
@@ -40,5 +46,15 @@ pub trait Broker {
             panic!("{}", err);
         }
         rx.await.expect("blocking_recv reply error")
+    }
+
+    fn blocking_call(&self, to: Self::Name, msg: Self::Proto) -> Result<Self::Proto, Self::Err> {
+        let (ctx, rx) = ChanCtx::new_call(msg, self.name());
+        let tx = self.tx(to);
+        if let Err(err) = tx.blocking_send(ctx) {
+            tracing::error!("fail to request. {}", err);
+            panic!("{}", err);
+        }
+        rx.blocking_recv().expect("blocking_recv reply error")
     }
 }

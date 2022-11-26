@@ -22,8 +22,8 @@ pub trait Adaptor: Send {
         msg: Result<<Self::Dec as Decoder>::Item, <Self::Dec as Decoder>::Error>,
     ) -> Result<(), Box<dyn std::error::Error>>;
 
-    /// None -> Skip
-    /// Err -> break
+    /// None -> connection close by peer or timeout
+    /// Err -> error happen while attempting to call Adaptor::recv
     async fn recv(&mut self) -> Result<Option<Self::RecvItem>, Box<dyn std::error::Error + Send>>;
 }
 
