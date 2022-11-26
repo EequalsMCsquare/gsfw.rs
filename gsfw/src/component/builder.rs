@@ -1,16 +1,15 @@
-use crate::chanrpc::{self, broker};
+use tokio::sync::mpsc;
 
-pub trait ComponentBuilder<P, N, B, E, Rx>
+use crate::chanrpc::{broker::Broker, ChanCtx};
+
+pub trait ComponentBuilder<B>
 where
-    P: chanrpc::Proto,
-    N: Send,
-    E: Send,
-    Rx: broker::Receiver<chanrpc::ChanCtx<P, N, E>>,
+    B: Broker,
 {
     // component name
-    fn name(&self) -> N;
-    fn build(self: Box<Self>) -> Box<dyn super::Component<P, N, E>>;
-    fn set_rx(&mut self, rx: Rx);
+    fn name(&self) -> B::Name;
+    fn build(self: Box<Self>) -> Box<dyn super::Component<B>>;
+    fn set_rx(&mut self, rx: mpsc::Receiver<ChanCtx<B::Proto, B::Name, B::Err>>);
     fn set_broker(&mut self, broker: B);
     fn runtime(&self) -> tokio::runtime::Runtime {
         tokio::runtime::Builder::new_current_thread()

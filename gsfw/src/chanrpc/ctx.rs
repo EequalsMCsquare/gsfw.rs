@@ -1,3 +1,5 @@
+use std::{fmt::Debug, hash::Hash};
+
 use tokio::sync::oneshot;
 
 type ReplySender<P, E> = oneshot::Sender<Result<P, E>>;
@@ -6,6 +8,8 @@ type ReplyReceiver<P, E> = oneshot::Receiver<Result<P, E>>;
 pub trait Proto: Send {
     fn proto_shutdown() -> Self;
 }
+
+pub trait Name: Send + Hash + Eq + Clone + Debug {}
 
 #[derive(Debug)]
 pub struct ChanCtx<P, N, E> {

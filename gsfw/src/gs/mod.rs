@@ -1,39 +1,34 @@
-use std::{collections::VecDeque, fmt::Debug};
-use tokio::task::JoinHandle;
-
 use futures::{ready, Future, FutureExt};
 use pin_project::pin_project;
+use std::error::Error as StdError;
+use std::{collections::VecDeque, fmt::Debug};
+use tokio::task::JoinHandle;
 
 mod builder;
 pub use builder::GameBuilder;
 
 #[derive(Debug)]
-struct ComponentHandle<N, E>
-where
-    N: Debug,
-    E: Debug,
-{
-    join: JoinHandle<Result<(), E>>,
+struct ComponentHandle<N> {
+    rt: tokio::runtime::Runtime,
+    join: JoinHandle<Result<(), Box<dyn StdError + Send>>>,
     name: N,
 }
 
 #[derive(Debug)]
 #[pin_project]
-pub struct Game<N, E>
+pub struct Game<N>
 where
     N: Send + Debug,
-    E: Debug,
 {
-    component_handles: VecDeque<ComponentHandle<N, E>>,
-    poll_component: Option<ComponentHandle<N, E>>,
+    component_handles: VecDeque<ComponentHandle<N>>,
+    poll_component: Option<ComponentHandle<N>>,
     ctrl_c_future: JoinHandle<()>,
     ctrl_c_trigger: bool,
 }
 
-impl<N, E> Future for Game<N, E>
+impl<N> Future for Game<N>
 where
     N: Send + Debug,
-    E: Debug,
 {
     type Output = ();
 
@@ -50,11 +45,13 @@ where
             this.poll_component
                 .replace(this.component_handles.pop_front().unwrap());
         }
-        while let Some(handle) = this.poll_component {
+        while let Some(mut handle) = this.poll_component.take() {
             match ready!(handle.join.poll_unpin(cx)) {
                 Ok(_) => tracing::info!("[{:?}] join success", handle.name),
                 Err(err) => tracing::error!("error occur while wait for component join: {}", err),
             }
+            // shutdown component's runtime
+            handle.rt.shutdown_background();
             *this.poll_component = this.component_handles.pop_front();
         }
         std::task::Poll::Ready(())
