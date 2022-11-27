@@ -1,5 +1,5 @@
-use tokio::sync::mpsc;
 use super::ChanCtx;
+use tokio::sync::mpsc;
 
 pub struct CastTx<P, N, E> {
     from: N,
@@ -22,6 +22,15 @@ where
             .tx
             .send(ChanCtx::new_cast(msg, self.from.clone()))
             .await
+        {
+            tracing::error!("fail to cast. {}", err)
+        }
+    }
+
+    pub fn blocking_cast(&self, msg: P) {
+        if let Err(err) = self
+            .tx
+            .blocking_send(ChanCtx::new_cast(msg, self.from.clone()))
         {
             tracing::error!("fail to cast. {}", err)
         }

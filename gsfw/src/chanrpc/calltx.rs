@@ -26,4 +26,12 @@ where
         }
         rx
     }
+
+    pub fn blocking_call(&self, msg: P) -> oneshot::Receiver<Result<P, E>> {
+        let (ctx, rx) = ChanCtx::new_call(msg, self.from.clone());
+        if let Err(err) = self.tx.blocking_send(ctx) {
+            tracing::error!("fail to call. {}", err);
+        }
+        rx
+    }
 }

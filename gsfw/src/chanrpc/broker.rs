@@ -20,7 +20,7 @@ pub trait Broker {
         CastTx::new(self.name(), self.tx(name).clone())
     }
 
-    async fn call_tx(&self, name: Self::Name) -> CallTx<Self::Proto, Self::Name, Self::Err> {
+    fn call_tx(&self, name: Self::Name) -> CallTx<Self::Proto, Self::Name, Self::Err> {
         CallTx::new(self.name(), self.tx(name).clone())
     }
 
