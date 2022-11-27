@@ -93,11 +93,15 @@ impl<B: Broker + 'static> GameBuilder<B> {
                 let mut component = builder.build();
                 tracing::debug!("component {:?} setup complete", component.name());
                 let name = component.name();
-                let join = rt.spawn(async move {
-                    component.init().await.unwrap();
-                    component.run().await
+                let join = std::thread::spawn(move || {
+                    let ret = rt.block_on(async move {
+                        component.init().await?;
+                        component.run().await
+                    });
+                    rt.shutdown_background();
+                    ret
                 });
-                super::ComponentHandle { rt, join, name }
+                super::ComponentHandle { join, name }
             })
             .collect();
         tracing::info!("all components launch complete, running: {:?}", names);

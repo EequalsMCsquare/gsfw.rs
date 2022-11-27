@@ -9,8 +9,9 @@ pub use builder::GameBuilder;
 
 #[derive(Debug)]
 struct ComponentHandle<N> {
-    rt: tokio::runtime::Runtime,
-    join: JoinHandle<Result<(), Box<dyn StdError + Send>>>,
+    // rt: tokio::runtime::Runtime,
+    // join: JoinHandle<Result<(), Box<dyn StdError + Send>>>,
+    join: std::thread::JoinHandle<Result<(), Box<dyn StdError + Send>>>,
     name: N,
 }
 
@@ -45,13 +46,23 @@ where
             this.poll_component
                 .replace(this.component_handles.pop_front().unwrap());
         }
-        while let Some(mut handle) = this.poll_component.take() {
-            match ready!(handle.join.poll_unpin(cx)) {
+        while let Some(handle) = this.poll_component.take() {
+            // match ready!(handle
+            //     .join
+            //     .join()
+            //     .expect("handle's thread join error")
+            //     .poll_unpin(cx))
+            // {
+            //     Ok(_) => tracing::info!("[{:?}] join success", handle.name),
+            //     Err(err) => tracing::error!("error occur while wait for component join: {}", err),
+            // }
+            match handle.join.join().expect("component thread join error") {
                 Ok(_) => tracing::info!("[{:?}] join success", handle.name),
                 Err(err) => tracing::error!("error occur while wait for component join: {}", err),
             }
+
             // shutdown component's runtime
-            handle.rt.shutdown_background();
+            // handle.rt.shutdown_background();
             *this.poll_component = this.component_handles.pop_front();
         }
         std::task::Poll::Ready(())
