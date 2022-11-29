@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{cell::RefCell, fmt::Debug, hash::Hash};
 
 use tokio::sync::oneshot;
 
@@ -13,10 +13,13 @@ pub trait Name: Send + Hash + Eq + Clone + Debug {}
 
 #[derive(Debug)]
 pub struct ChanCtx<P, N, E> {
-    pub payload: P,
-    pub from: N,
+    payload: RefCell<Option<P>>,
+    from: N,
     reply_chan: Option<ReplySender<P, E>>,
 }
+
+unsafe impl<P: Send, N: Send, E: Send> Send for ChanCtx<P, N, E> {}
+unsafe impl<P: Sync, N: Sync, E:Sync> Sync for ChanCtx<P, N, E> {}
 
 #[allow(dead_code)]
 impl<P, N, E> ChanCtx<P, N, E>
@@ -27,7 +30,7 @@ where
         let (tx, rx) = oneshot::channel();
         (
             Self {
-                payload: msg,
+                payload: RefCell::new(msg.into()),
                 from,
                 reply_chan: Some(tx),
             },
@@ -37,10 +40,19 @@ where
 
     pub fn new_cast(msg: P, from: N) -> ChanCtx<P, N, E> {
         Self {
-            payload: msg,
+            payload: RefCell::new(Some(msg)),
             from,
             reply_chan: None,
         }
+    }
+
+    pub fn from(&self) -> &N {
+        &self.from
+    }
+
+    pub fn payload(&self) -> P {
+        let mut p = self.payload.borrow_mut();
+        p.take().expect("calling twice payload()")
     }
 
     pub fn ok(self, reply: P) {
