@@ -2,4 +2,5 @@
 members = [
 	"gsfw",
 	"gsfw-util",
+	"gsfw-derive"
 	]
