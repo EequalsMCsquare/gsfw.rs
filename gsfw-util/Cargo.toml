@@ -1,8 +1,8 @@
 [package]
 name = "gsfw-util"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
-authors = ["XiaoZ zhongxiao0711@gmail.com"]
+authors = ["XiaoZ <zhongxiao0711@gmail.com>"]
 license = "Apache-2.0"
 description = "game server development utils"
 readme = "README.md"
