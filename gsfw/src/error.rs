@@ -19,5 +19,13 @@ pub enum Error {
     #[error("adaptor recv error occur. close agent")]
     AdaptorRecv,
     #[error("adaptor ready error occur. close agent")]
-    AdaptorReady
+    AdaptorReady,
+    #[error("unknown protocol. MSG_ID: {0}")]
+    UnknownPB(i32),
+    #[error("decode error. {0}")]
+    Decode(String),
+    #[error("encode error. {0}")]
+    Encode(String),
+    #[error("mismatch variant when cast to {0}")]
+    VariantCast(&'static str),
 }

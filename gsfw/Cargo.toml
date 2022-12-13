@@ -21,6 +21,7 @@ thiserror = "1"
 futures = "0.3"
 pin-project = "1"
 bytes = "1.2"
+once_cell = { version = "1" }
 gsfw-util = { path = "../gsfw-util", optional = true, version = "0.1.0" }
 gsfw-derive ={ path = "../gsfw-derive", optional = true, version = "0.1.0"}
 # gsfw-util = { path = "../gsfw-util", version = "0.1.0" }
