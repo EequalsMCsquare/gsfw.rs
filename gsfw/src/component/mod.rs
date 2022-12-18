@@ -11,6 +11,6 @@ where
     B: Broker,
 {
     fn name(&self) -> B::Name;
-    async fn init(&mut self) -> Result<(), Box<dyn StdError + Send>>;
+    async fn init(self: Box<Self>) -> Result<Box<dyn Component<B>>, Box<dyn StdError + Send>>;
     async fn run(self: Box<Self>) -> Result<(), Box<dyn StdError + Send>>;
 }

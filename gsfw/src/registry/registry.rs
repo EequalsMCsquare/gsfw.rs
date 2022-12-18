@@ -14,12 +14,20 @@ where
     const NAME_MAP: Lazy<HashMap<&'static str, Self>>;
     const ID_MAP: Lazy<HashMap<i32, Self>>;
 
+    fn name(&self) -> &'static str
+    where
+        Self: Sized;
+
+    fn msgid(&self) -> i32
+    where
+        Self: Sized;
+
     // frame buf layout should be [msgid][payload]
     fn decode_frame<B>(frame_buf: B) -> Result<Self, crate::error::Error>
     where
         B: bytes::Buf,
         Self: Sized;
-    
+
     // bytes needed to encode [msgid][payload]
     fn encoded_len(&self) -> usize
     where
@@ -40,7 +48,7 @@ where
     where
         B: bytes::BufMut,
         Self: Sized;
-    
+
     fn encode_with_len(&self) -> bytes::Bytes
     where
         Self: Sized;

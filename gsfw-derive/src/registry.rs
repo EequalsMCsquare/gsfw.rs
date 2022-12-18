@@ -135,6 +135,21 @@ fn registry_codegen(
         }
     });
 
+    let name_cases = metas.iter().map(|m| {
+        let vident = m.ident.clone();
+        let vname = m.ident.to_string();
+        quote! {
+            Self::#vident(_) => #vname
+        }
+    });
+
+    let msgid_cases = metas.iter().map(|m| {
+        let vname = m.ident.clone();
+        quote! {
+            Self::#vname(_) => #name::#vname as i32
+        }
+    });
+
     let into_expand: TokenStream2 = metas
         .iter()
         .map(|m| {
@@ -205,6 +220,24 @@ fn registry_codegen(
                 let defaults_vec = vec![#(#defaults2),*];
                 std::iter::zip(Self::IDS.iter().map(|&s|s), defaults_vec.into_iter()).collect()
             });
+
+            fn name(&self) -> &'static str
+            where
+                Self: Sized
+            {
+                match self {
+                    #(#name_cases),*,
+                }
+            }
+
+            fn msgid(&self) -> i32
+            where
+                Self: Sized
+            {
+                match self {
+                    #(#msgid_cases),*,
+                }
+            }
 
             fn decode_frame<B>(mut buf: B) -> Result<Self, ::gsfw::error::Error>
             where

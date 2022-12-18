@@ -35,15 +35,25 @@ pub struct WheelProxy<T>
 where
     T: Debug + Send,
 {
-    slot: u32,
-    slot_duration: std::time::Duration,
-    start: Arc<RwLock<std::time::Instant>>,
-    tick_rx: mpsc::Receiver<VecDeque<Meta<T>>>,
-    inner_tx: mpsc::Sender<TimeWheelProto<T>>,
-    timer_map: HashMap<u64, super::Snapshot>,
+    pub(crate) slot: u32,
+    pub(crate) slot_duration: std::time::Duration,
+    pub(crate) start: Arc<RwLock<std::time::Instant>>,
+    tick_tx: mpsc::Sender<VecDeque<Meta<T>>>,
+    pub(crate) tick_rx: mpsc::Receiver<VecDeque<Meta<T>>>,
+    pub(crate) inner_tx: mpsc::Sender<TimeWheelProto<T>>,
+    pub(crate) timer_map: HashMap<u64, super::Snapshot>,
+    pub(crate) ticker_join: tokio::task::JoinHandle<()>,
+    pub(crate) inner_join: tokio::task::JoinHandle<()>,
+}
 
-    ticker_join: tokio::task::JoinHandle<()>,
-    inner_join: tokio::task::JoinHandle<()>,
+impl<T> Drop for WheelProxy<T>
+where
+    T: Debug + Send,
+{
+    fn drop(&mut self) {
+        self.ticker_join.abort();
+        self.inner_join.abort();
+    }
 }
 
 impl<T> WheelProxy<T>
@@ -68,6 +78,16 @@ where
 
     pub fn round_end(&self) -> std::time::Instant {
         self.start.read().add(self.slot * self.slot_duration)
+    }
+
+    pub fn round_start(&self) -> std::time::Instant {
+        self.start.read().clone()
+    }
+
+    pub fn within_round(&self, deadline: std::time::Instant) -> bool {
+        let start = self.round_start();
+        let end = start + self.round_duration();
+        deadline >= start && deadline <= end
     }
 
     pub async fn dispatch(
@@ -221,6 +241,80 @@ where
 
     /// batch_add atomic operation. either all metas are added to the wheel, nor none is added.
     /// batch_add will first check metas's id is unique and
+    /// then check all metas are not overflow
+    /// if some metas are elpased, they will be trigger immediatly
+    pub async fn batch_add_even_elapse(
+        &mut self,
+        metas: Vec<Meta<T>>,
+    ) -> Result<Vec<super::Snapshot>, super::Error<T>> {
+        if metas.len() == 0 {
+            return Ok(Vec::new());
+        }
+
+        let start = self.start.read().clone();
+        let round_end = start.add(self.round_duration());
+        let slot_dur = self.slot_duration.as_nanos();
+        let mut proto = Vec::with_capacity(metas.len());
+        let mut elpase_metas = VecDeque::with_capacity(4);
+        for mut meta in metas {
+            // check id unique
+            if self.timer_map.contains_key(&meta.id) {
+                return Err(super::Error::DupTimer(meta.id));
+            }
+            // ensure not overflow and elapse
+            if meta.start < start {
+                meta.allow_norec = true;
+                elpase_metas.push_back(meta);
+                // return Err(super::Error::TimeElapse(meta.data.take()));
+                continue;
+            } else if meta.end > round_end {
+                return Err(super::Error::Overflow(meta.data.take()));
+            } else {
+                // let diff = (meta.end - start).as_nanos();
+                let meta_end = meta.end;
+                proto.push((
+                    meta,
+                    // (diff / slot_dur - if diff % slot_dur != 0 { 0 } else { 1 }) as usize,
+                    find_slot(start, slot_dur, meta_end) as usize,
+                ));
+            }
+        }
+        tracing::debug!("elapse: {:?}", elpase_metas);
+        // trigger elapse metas
+        self.tick_tx.send(elpase_metas).await.unwrap();
+        // insert snapshot of this batch timers
+        proto.iter().for_each(|(meta, _)| {
+            self.timer_map.insert(
+                meta.id,
+                super::Snapshot {
+                    id: meta.id,
+                    start: meta.start,
+                    end: meta.end,
+                },
+            );
+        });
+        let ret = proto
+            .iter()
+            .map(|(meta, _)| super::Snapshot {
+                id: meta.id,
+                start: meta.start,
+                end: meta.end,
+            })
+            .collect();
+        if let Err(err) = self.inner_tx.send(TimeWheelProto::BatchAdd(proto)).await {
+            return Err(match err.0 {
+                TimeWheelProto::BatchAdd(batch) => {
+                    super::Error::BatchChannel(batch.into_iter().map(|(meta, _)| meta).collect())
+                }
+                // this shall never happen
+                _ => panic!("unexpected error"),
+            });
+        }
+        return Ok(ret);
+    }
+
+    /// batch_add atomic operation. either all metas are added to the wheel, nor none is added.
+    /// batch_add will first check metas's id is unique and
     /// then check all metas are not overflow or elapse
     pub async fn batch_add(
         &mut self,
@@ -234,6 +328,7 @@ where
         let round_end = start.add(self.round_duration());
         let slot_dur = self.slot_duration.as_nanos();
         let mut proto = Vec::with_capacity(metas.len());
+
         for mut meta in metas {
             // check id unique
             if self.timer_map.contains_key(&meta.id) {
@@ -294,19 +389,14 @@ where
                         self.timer_map.remove(&meta.id);
                         return true;
                     }
-                    return false;
+                    meta.allow_norec
                 })
                 .collect();
         }
         panic!()
     }
-}
 
-impl<T> Drop for WheelProxy<T>
-where
-    T: Debug + Send,
-{
-    fn drop(&mut self) {
+    pub fn stop(self) {
         self.inner_join.abort();
         self.ticker_join.abort();
     }
@@ -350,7 +440,7 @@ where
             wq,
             tx: tx.clone(),
             rx,
-            tick_tx,
+            tick_tx: tick_tx.clone(),
             state: InnerState::PollRecv,
         };
         let inner_tx = tx.clone();
@@ -365,6 +455,7 @@ where
         });
 
         WheelProxy {
+            tick_tx,
             tick_rx,
             inner_tx: tx,
             ticker_join,
@@ -375,7 +466,6 @@ where
             timer_map: Default::default(),
         }
     }
-
 }
 
 impl<T: Debug + Send> Future for Inner<T>

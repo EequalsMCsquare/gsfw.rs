@@ -7,7 +7,7 @@ use std::{
 
 static TIMER_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Snapshot {
     pub id: u64,
     pub start: std::time::Instant,
@@ -17,6 +17,7 @@ pub struct Snapshot {
 #[derive(Debug)]
 pub struct Meta<T> {
     pub id: u64,
+    pub(crate) allow_norec: bool,
     pub start: std::time::Instant,
     pub end: std::time::Instant,
     pub data: Option<T>,
@@ -29,6 +30,7 @@ impl<T> Meta<T> {
             start,
             end,
             data: Some(data),
+            allow_norec: false,
         }
     }
 }
@@ -48,6 +50,7 @@ where
             sleep: Box::pin(tokio::time::sleep_until(end.into())),
             meta: Meta {
                 id: TIMER_ID.fetch_add(1, Ordering::Acquire),
+                allow_norec: false,
                 start,
                 end,
                 data: Some(data),

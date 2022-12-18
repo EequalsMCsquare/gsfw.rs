@@ -90,13 +90,12 @@ impl<B: Broker + 'static> GameBuilder<B> {
                 builder.set_rx(rxs.pop_front().unwrap());
                 tracing::debug!("ComponentBuilder {:?} setup complete", builder.name());
                 let rt = builder.runtime();
-                let mut component = builder.build();
+                let component = builder.build();
                 tracing::debug!("component {:?} setup complete", component.name());
                 let name = component.name();
                 let join = std::thread::spawn(move || {
                     let ret = rt.block_on(async move {
-                        component.init().await?;
-                        component.run().await
+                        component.init().await?.run().await
                     });
                     rt.shutdown_background();
                     ret

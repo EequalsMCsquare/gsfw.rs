@@ -73,6 +73,7 @@ where
                                 return Err(crate::error::Error::AdaptorSend)
                             }
                         } else {
+                            tracing::error!("read zero");
                             return Result::<(), _>::Err(crate::error::Error::ReadZero)
                         }
                     },
@@ -85,7 +86,7 @@ where
                                         return Err(crate::error::Error::SinkSend)
                                     }
                                 } else {
-                                    // tracing::debug!("connection closed by peer or timeout reached");
+                                    tracing::debug!("connection closed by peer or timeout reached");
                                     return Ok(())
                                 }
                             },
