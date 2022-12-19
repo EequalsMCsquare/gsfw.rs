@@ -11,6 +11,7 @@ use std::{
     task::Poll,
 };
 use tokio::sync::mpsc;
+use tracing::instrument;
 
 ///
 /// # Time Wheel Proxy
@@ -90,6 +91,7 @@ where
         deadline >= start && deadline <= end
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn dispatch(
         &mut self,
         duration: std::time::Duration,
@@ -99,6 +101,7 @@ where
             .await
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn dispatch_until(
         &mut self,
         end: std::time::Instant,
@@ -137,6 +140,7 @@ where
         return Ok(snapshot);
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn cancel(&mut self, id: u64) -> Result<(), super::Error<T>> {
         let snapshot = self
             .timer_map
@@ -156,6 +160,7 @@ where
             .map_err(|_| super::Error::Channel(None))
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn accelerate(
         &mut self,
         id: u64,
@@ -195,6 +200,7 @@ where
             .map_err(|_| super::Error::Channel(None))
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn delay(
         &mut self,
         id: u64,
@@ -220,6 +226,7 @@ where
             .map_err(|_| super::Error::Channel(None))
     }
 
+    #[instrument(level="trace" skip(self))]
     pub async fn trigger(&mut self, id: u64) -> Result<(), super::Error<T>> {
         let snapshot = self
             .timer_map
@@ -243,6 +250,7 @@ where
     /// batch_add will first check metas's id is unique and
     /// then check all metas are not overflow
     /// if some metas are elpased, they will be trigger immediatly
+    #[instrument(level="trace" skip(self))]
     pub async fn batch_add_even_elapse(
         &mut self,
         metas: Vec<Meta<T>>,
@@ -279,7 +287,7 @@ where
                 ));
             }
         }
-        tracing::debug!("elapse: {:?}", elpase_metas);
+        tracing::trace!("elapse metas: {:?}", elpase_metas);
         // trigger elapse metas
         self.tick_tx.send(elpase_metas).await.unwrap();
         // insert snapshot of this batch timers
@@ -316,6 +324,7 @@ where
     /// batch_add atomic operation. either all metas are added to the wheel, nor none is added.
     /// batch_add will first check metas's id is unique and
     /// then check all metas are not overflow or elapse
+    #[instrument(level="trace" skip(self))]
     pub async fn batch_add(
         &mut self,
         metas: Vec<Meta<T>>,
@@ -394,11 +403,6 @@ where
                 .collect();
         }
         panic!()
-    }
-
-    pub fn stop(self) {
-        self.inner_join.abort();
-        self.ticker_join.abort();
     }
 }
 
@@ -510,28 +514,28 @@ where
                                 let slot_dur = this.slot_duration.as_nanos();
                                 let slot = find_slot(start, slot_dur, meta.end);
                                 if slot as u32 >= *this.slot {
-                                    tracing::error!("[Add] overflow timer. {:?}", meta);
+                                    tracing::error!(
+                                        "unable to add timer, since it is overflow. {:?}",
+                                        meta
+                                    );
                                     continue;
                                 }
-                                tracing::info!("[Add] add timer. {:?}", meta);
                                 this.wq.get_mut(slot as usize).unwrap().push_back(meta);
                             }
                             TimeWheelProto::BatchAdd(batch) => {
                                 for (meta, slot) in batch {
                                     let vec = this.wq.get_mut(slot).unwrap();
-                                    tracing::info!("[BatchAdd] add timer. {:?}", meta);
                                     vec.push_back(meta);
                                 }
                             }
                             TimeWheelProto::Cancel { id, slot_hint } => {
                                 let vec = this.wq.get_mut(slot_hint).unwrap();
-                                tracing::info!("[Cancel] cancel timer {}", id);
                                 if let Some((idx, _)) =
                                     vec.iter().enumerate().find(|(_, meta)| meta.id == id)
                                 {
                                     vec.swap_remove_back(idx);
                                 } else {
-                                    tracing::warn!("[Cancel] timer {} not found", id);
+                                    tracing::warn!("cannel non-exsitent timer {}", id);
                                 }
                             }
                             TimeWheelProto::Accelerate { id, slot_hint, dur } => {
@@ -551,7 +555,7 @@ where
                                         this.wq.get_mut(new_slot).unwrap().push_back(meta);
                                     }
                                 } else {
-                                    tracing::warn!("[Accelerate] timer {} not found", id);
+                                    tracing::error!("accelerate non-existent timer {}", id);
                                 }
                             }
                             TimeWheelProto::Delay { id, slot_hint, dur } => {
@@ -571,13 +575,12 @@ where
                                         this.wq.get_mut(new_slot).unwrap().push_back(meta);
                                     }
                                 } else {
-                                    tracing::warn!("[Delay] timer {} not found", id);
+                                    tracing::warn!("dealy non-existent timer {}", id);
                                 }
                             }
                             TimeWheelProto::Trigger { id, slot_hint } => {
                                 let now = std::time::Instant::now();
                                 let vec = this.wq.get_mut(slot_hint).unwrap();
-                                tracing::info!("[Trigger] trigger timer {} now", id);
                                 if let Some((idx, _)) =
                                     vec.iter().enumerate().find(|(_, meta)| meta.id == id)
                                 {
@@ -598,10 +601,10 @@ where
                                             return Poll::Pending;
                                         }
                                     } else {
-                                        tracing::warn!("[Trigger] trigger timer {} not found", id);
+                                        tracing::warn!("trigger non-existent timer {}", id);
                                     }
                                 } else {
-                                    tracing::warn!("[Cancel] timer {} not found", id);
+                                    tracing::warn!("trigger non-exstent timer {}", id);
                                 }
                             }
                         }

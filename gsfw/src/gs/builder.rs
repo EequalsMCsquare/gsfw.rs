@@ -1,4 +1,5 @@
 use tokio::sync::mpsc;
+use tracing::{instrument, Instrument};
 
 use crate::{
     chanrpc::{broker::Broker, ChanCtx},
@@ -19,6 +20,7 @@ impl<B: Broker + 'static> GameBuilder<B> {
         }
     }
 
+    #[instrument(level="info", skip_all, name="add_component", fields(name=?component_builder.name()))]
     pub fn component<CB>(mut self, component_builder: CB) -> Self
     where
         CB: ComponentBuilder<B> + 'static,
@@ -34,6 +36,7 @@ impl<B: Broker + 'static> GameBuilder<B> {
         self
     }
 
+    #[instrument(level = "info", skip(self), name="game_serve")]
     pub fn serve(self) -> Result<super::Game<B::Name>, crate::error::Error> {
         if self.component_builders.len() == 0 {
             return Err(crate::error::Error::NoComponent);
@@ -63,25 +66,29 @@ impl<B: Broker + 'static> GameBuilder<B> {
             .collect();
 
         // future of SIGINT event
-        let ctrl_c_future = tokio::spawn(async move {
-            if let Err(err) = tokio::signal::ctrl_c().await {
-                tracing::error!("ctrl_c error: {}", err);
-            }
-            tracing::info!("CTRL+C pressed, begin to clean up");
-            // prevent blocking the task drive thread
-            for (k, tx) in tx_pairs {
-                tracing::debug!("sending shutdown to {:?}", k);
-                if let Err(err) = tx
-                    .send(ChanCtx::new_cast(
-                        <B::Proto as crate::chanrpc::Proto>::proto_shutdown(),
-                        k,
-                    ))
-                    .await
-                {
-                    tracing::error!("fail to send shutdown. {}", err);
+        let ctrl_c_future = tokio::spawn(
+            async move {
+                if let Err(err) = tokio::signal::ctrl_c().await {
+                    tracing::error!("ctrl_c error: {}", err);
+                }
+                tracing::debug!("CTRL+C pressed, begin to clean up");
+                // prevent blocking the task drive thread
+                for (k, tx) in tx_pairs {
+                    tracing::trace!("sending shutdown to {:?}", k);
+                    if let Err(err) = tx
+                        .send(ChanCtx::new_cast(
+                            <B::Proto as crate::chanrpc::Proto>::proto_shutdown(),
+                            k,
+                        ))
+                        .await
+                    {
+                        tracing::error!("fail to send shutdown. {}", err);
+                    }
                 }
             }
-        });
+            .instrument(tracing::info_span!("waiting for ctrl_c...").or_current()),
+        );
+
         let component_handles = self
             .component_builders
             .into_iter()
@@ -91,12 +98,16 @@ impl<B: Broker + 'static> GameBuilder<B> {
                 tracing::debug!("ComponentBuilder {:?} setup complete", builder.name());
                 let rt = builder.runtime();
                 let component = builder.build();
+                let component_name = component.name();
                 tracing::debug!("component {:?} setup complete", component.name());
                 let name = component.name();
                 let join = std::thread::spawn(move || {
-                    let ret = rt.block_on(async move {
-                        component.init().await?.run().await
-                    });
+                    let ret = rt.block_on(
+                        async move { component.init().await?.run().await }.instrument(
+                            tracing::debug_span!("component", name=?component_name)
+                                .or_current(),
+                        ),
+                    );
                     rt.shutdown_background();
                     ret
                 });

@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use tokio::net::{TcpListener, TcpStream};
 use tower::Service;
+use tracing::{instrument, Instrument};
 
 pub struct Gate {
     inner: TcpListener,
@@ -28,13 +29,15 @@ impl Gate {
     {
         loop {
             match self.inner.accept().await {
-                Ok((stream, addr)) => {
-                    tracing::debug!("incoming connection: {:?}", addr);
+                Ok((stream, remote)) => {
+                    // tracing::trace!("incoming connection: {:?}", remote);
                     let fut = service.call(stream);
-                    tokio::spawn(fut);
+                    tokio::spawn(
+                        fut.instrument(tracing::trace_span!("gate_agent", ?remote).or_current()),
+                    );
                 }
                 Err(err) => {
-                    tracing::debug!("fail to accpect. {}", err);
+                    tracing::error!("fail to accpect. {}", err);
                 }
             }
         }

@@ -3,10 +3,9 @@ use crate::{
     codec::{Decoder, Encoder},
     error,
 };
-
 use futures::{Future, SinkExt, StreamExt};
 use std::{fmt::Debug, marker::PhantomData, pin::Pin, task::Poll};
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{io::{AsyncRead, AsyncWrite}};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tower::Service;
 
@@ -57,6 +56,7 @@ where
         let adaptor_builder = self.adaptor_builder.clone();
         Box::pin(async move {
             let mut adaptor = adaptor_builder.build().await;
+            tracing::trace!("adaptor build success, executing Adaptor::ready");
             let (mut stream, mut sink) = match adaptor.ready(stream, sink).await {
                 Ok(pair) => pair,
                 Err(err) => {
@@ -64,6 +64,7 @@ where
                     return Err(crate::error::Error::AdaptorReady);
                 }
             };
+            tracing::trace!("adaptor is ready, begin to handle message");
             loop {
                 tokio::select! {
                     frame = stream.next() => {
@@ -73,7 +74,7 @@ where
                                 return Err(crate::error::Error::AdaptorSend)
                             }
                         } else {
-                            tracing::error!("read zero");
+                            tracing::warn!("read zero, connection closed by peer or connection timeout");
                             return Result::<(), _>::Err(crate::error::Error::ReadZero)
                         }
                     },
@@ -86,7 +87,7 @@ where
                                         return Err(crate::error::Error::SinkSend)
                                     }
                                 } else {
-                                    tracing::debug!("connection closed by peer or timeout reached");
+                                    tracing::warn!("connection closed by peer or connection timeout");
                                     return Ok(())
                                 }
                             },
